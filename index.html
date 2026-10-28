@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body>
+  <h2>Parcel Barcode Scanner</h2>
+
+  <label>Marketplace:</label>
+  <select id="market">
+    <option>Amazon</option>
+    <option>Flipkart</option>
+    <option>Meesho</option>
+  </select>
+
+  <p>Order ID:</p>
+  <input id="order" placeholder="Enter Order ID">
+
+  <div id="reader" style="width:100%;max-width:400px"></div>
+  <p id="result">Barcode scan કરો.</p>
+
+  <script>
+    function onScanSuccess(code) {
+      document.getElementById("result").innerText =
+        "Barcode: " + code;
+      scanner.clear();
+    }
+
+    const scanner = new Html5Qrcode("reader");
+    Html5Qrcode.getCameras().then(cameras => {
+      if (cameras.length) {
+        scanner.start(
+          cameras[cameras.length - 1].id,
+          { fps: 10, qrbox: 250 },
+          onScanSuccess
+        );
+      }
+    }).catch(() => {
+      document.getElementById("result").innerText =
+        "Camera permission Allow કરો.";
+    });
+  </script>
+</body>
+</html>
