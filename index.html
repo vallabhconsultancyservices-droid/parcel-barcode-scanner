@@ -1,86 +1,168 @@
 
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parcel Barcode Scanner</title>
 <script src="https://unpkg.com/html5-qrcode"></script>
 <style>
-body{font-family:Arial;max-width:600px;margin:auto;padding:16px;background:#f5f6f8}
-.card{background:white;padding:16px;margin-bottom:14px;border-radius:12px}
-select,input,button{width:100%;box-sizing:border-box;padding:13px;margin:7px 0;font-size:16px}
-button{background:#1a73e8;color:white;border:0;border-radius:8px}
-#status{padding:12px;overflow-wrap:anywhere;background:#eee}
+body{font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:16px;background:#f2f4f7}
+.card{background:#fff;padding:16px;margin-bottom:15px;border-radius:12px}
+label{display:block;margin-top:12px;font-weight:bold}
+select,input,button{width:100%;box-sizing:border-box;padding:13px;margin-top:8px;font-size:16px}
+button{background:#1769e0;color:white;border:0;border-radius:8px;cursor:pointer}
+#stop{background:#555}
+#status{padding:12px;margin-top:12px;background:#eee;border-radius:6px;overflow-wrap:anywhere}
+#raw{overflow-wrap:anywhere;font-weight:bold}
 </style>
 </head>
 <body>
+
 <div class="card">
-<h2>Parcel Barcode Scanner</h2>
+<h2>📦 Parcel Barcode Scanner</h2>
+
 <label>Marketplace</label>
 <select id="platform">
-<option>Amazon</option><option>Flipkart</option><option>Meesho</option>
+<option>Amazon</option>
+<option>Flipkart</option>
+<option>Meesho</option>
 </select>
+
 <label>Order ID</label>
 <input id="orderId" placeholder="Enter Order ID">
-<div id="reader"></div>
-<button onclick="startScanner()">Start Camera</button>
-<button onclick="stopScanner()">Stop Camera</button>
+
+<div id="reader" style="margin-top:15px"></div>
+<button id="start" onclick="startScanner()">Start Camera</button>
+<button id="stop" onclick="stopScanner()">Stop Camera</button>
 </div>
+
 <div class="card">
-<b>Latest Scan</b>
+<h3>Latest Scan</h3>
 <p id="raw">Nothing scanned yet.</p>
 <div id="status">Ready to scan.</div>
 </div>
+
 <script>
 const API = "https://script.google.com/macros/s/AKfycbzGasdR-hlOOePT80lu9rZ0sz6xR3dBQ5qOUjwOA7XLlrmOuxDzOXGt8r172_CKaYIYSg/exec";
-let scanner = null, busy = false, previous = "";
 
-function status(t){document.getElementById("status").textContent=t;}
+let scanner = null;
+let busy = false;
+let previous = "";
 
-function startScanner(){
- if(scanner)return;
- scanner=new Html5Qrcode("reader");
- scanner.start({facingMode:"environment"},
-  {fps:10,qrbox:{width:280,height:140}},
-  onScan,()=>{}
- ).then(()=>status("Camera ready. Scan barcode."))
- .catch(e=>{scanner=null;status("Camera error: "+e);});
+function showStatus(message, success=false) {
+  const el = document.getElementById("status");
+  el.textContent = message;
+  el.style.background = success ? "#d9f5df" : "#eee";
 }
 
-async function stopScanner(){
- if(scanner){
-  try{await scanner.stop();await scanner.clear();}catch(e){}
-  scanner=null;
- }
- status("Scanner stopped.");
+async function startScanner() {
+  if (scanner) return;
+
+  try {
+    scanner = new Html5Qrcode("reader");
+
+    await scanner.start(
+      { facingMode: "environment" },
+      {
+        fps: 12,
+        qrbox: { width: 280, height: 140 },
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.CODE_93,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.ITF,
+          Html5QrcodeSupportedFormats.QR_CODE
+        ]
+      },
+      onScan,
+      () => {}
+    );
+
+    showStatus("Camera ready. Scan your parcel.", true);
+  } catch (error) {
+    scanner = null;
+    showStatus("Camera error: " + error);
+  }
 }
 
-function onScan(text){
- if(busy||text===previous)return;
- busy=true;previous=text;
- document.getElementById("raw").textContent=text;
- status("Saving to Google Sheet...");
+async function stopScanner() {
+  if (scanner) {
+    try {
+      await scanner.stop();
+      await scanner.clear();
+    } catch (error) {}
+    scanner = null;
+  }
+  showStatus("Camera stopped.");
+}
 
- const params=new URLSearchParams({
-  action:"save",
-  platform:document.getElementById("platform").value,
-  orderId:document.getElementById("orderId").value,
-  rawData:text,
-  callback:"scanResult"
- });
+function onScan(barcode) {
+  if (busy || barcode === previous) return;
 
- window.scanResult=function(r){
-  busy=false;
-  if(r.ok){status("Saved successfully! Row: "+r.row);}
-  else if(r.duplicate){status("Duplicate barcode: not saved.");}
-  else{previous="";status("Save failed: "+(r.message||"Unknown error"));}
-  delete window.scanResult;
- };
+  busy = true;
+  previous = barcode;
 
- const s=document.createElement("script");
- s.src=API+"?"+params.toString();
- s.onerror=function(){busy=false;previous="";status("Connection failed. Check deployment access.");s.remove();};
- s.onload=function(){s.remove();};
- document.body.appendChild(s);
+  document.getElementById("raw").textContent = barcode;
+  showStatus("Saving to Google Sheet...");
+
+  const params = new URLSearchParams({
+    action: "save",
+    platform: document.getElementById("platform").value,
+    orderId: document.getElementById("orderId").value.trim(),
+    rawData: barcode,
+    callback: "parcelScanCallback"
+  });
+
+  let script = document.createElement("script");
+  let finished = false;
+
+  function finish() {
+    busy = false;
+    if (script.parentNode) script.remove();
+    delete window.parcelScanCallback;
+  }
+
+  const timeout = setTimeout(() => {
+    if (finished) return;
+    finished = true;
+    finish();
+    previous = "";
+    showStatus("No response. Check Apps Script deployment and access.");
+  }, 20000);
+
+  window.parcelScanCallback = function(result) {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timeout);
+    finish();
+
+    if (result && result.ok) {
+      showStatus("Saved successfully! Row: " + result.row, true);
+      document.getElementById("orderId").value = "";
+    } else if (result && result.duplicate) {
+      showStatus("Duplicate barcode. Not saved.");
+    } else {
+      previous = "";
+      showStatus("Save failed: " + (result?.message || "Unknown error"));
+    }
+  };
+
+  script.onerror = function() {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timeout);
+    finish();
+    previous = "";
+    showStatus("Connection error. Check Apps Script URL and deployment.");
+  };
+
+  script.src = API + "?" + params.toString();
+  document.body.appendChild(script);
 }
 </script>
 </body>
