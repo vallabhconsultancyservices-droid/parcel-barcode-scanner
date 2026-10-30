@@ -5,303 +5,285 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Invoice OCR Scanner</title>
-
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-
 <style>
-* { box-sizing: border-box; }
-body {
-  font-family: Arial, sans-serif;
-  background: #f3f5f9;
-  margin: 0;
-  padding: 18px;
-  color: #202938;
-}
-.container {
-  max-width: 540px;
-  margin: auto;
-  background: white;
-  padding: 20px;
-  border-radius: 14px;
-  box-shadow: 0 3px 15px #0001;
-}
-h2 { text-align: center; margin-top: 5px; }
-label {
-  display: block;
-  font-weight: bold;
-  margin: 15px 0 7px;
-}
-select, input {
-  width: 100%;
-  padding: 13px;
-  border: 1px solid #ccd2dc;
-  border-radius: 8px;
-  font-size: 16px;
-}
-button {
-  width: 100%;
-  padding: 14px;
-  margin-top: 14px;
-  border: 0;
-  border-radius: 8px;
-  background: #155eef;
-  color: white;
-  font-size: 16px;
-  font-weight: bold;
-  cursor: pointer;
-}
-button:disabled { opacity: .5; }
-#saveBtn { background: #138a4b; }
-#status {
-  margin-top: 15px;
-  text-align: center;
-  font-weight: bold;
-  overflow-wrap: anywhere;
-}
-#preview {
-  width: 100%;
-  margin-top: 12px;
-  border-radius: 8px;
-  display: none;
-}
-#review { display: none; margin-top: 18px; }
-.note {
-  font-size: 13px;
-  color: #667085;
-  line-height: 1.5;
-}
+*{box-sizing:border-box}
+body{font-family:Arial,sans-serif;background:#f3f5f9;margin:0;padding:16px;color:#202938}
+.container{max-width:560px;margin:auto;background:white;padding:20px;border-radius:14px;box-shadow:0 3px 15px #0001}
+h2{text-align:center}
+label{display:block;font-weight:bold;margin:14px 0 7px}
+input,select{width:100%;padding:13px;border:1px solid #ccd2dc;border-radius:8px;font-size:16px}
+button{width:100%;padding:14px;margin-top:14px;border:0;border-radius:8px;background:#155eef;color:white;font-size:16px;font-weight:bold;cursor:pointer}
+button:disabled{opacity:.55}
+#saveBtn{background:#138a4b}
+#preview{width:100%;display:none;margin-top:12px;border-radius:8px}
+#review{display:none;margin-top:20px}
+#status{text-align:center;font-weight:bold;margin-top:15px;overflow-wrap:anywhere}
+.note{font-size:13px;color:#667085;line-height:1.5}
 </style>
 </head>
-
 <body>
 <div class="container">
-  <h2>Invoice OCR Scanner</h2>
-  <p class="note">Select marketplace, scan the invoice, check all five details and save.</p>
+<h2>Invoice OCR Scanner</h2>
+<p class="note">Select marketplace, scan invoice, check all six details and save.</p>
 
-  <label>1. Select Marketplace</label>
-  <select id="marketplace">
-    <option value="Amazon">Amazon</option>
-    <option value="Meesho">Meesho</option>
-    <option value="Flipkart">Flipkart</option>
-  </select>
+<label>1. Select Marketplace</label>
+<select id="marketplace">
+<option>Amazon</option>
+<option>Meesho</option>
+<option>Flipkart</option>
+</select>
 
-  <label>2. Capture Invoice Photo</label>
-  <input id="camera" type="file" accept="image/*" capture="environment">
+<label>2. Capture Invoice Photo</label>
+<input id="camera" type="file" accept="image/*" capture="environment">
+<img id="preview" alt="Invoice preview">
 
-  <img id="preview" alt="Invoice preview">
+<button id="scanBtn" onclick="scanInvoice()">Scan Invoice / Read OCR</button>
+<div id="status"></div>
 
-  <button id="scanBtn" onclick="scanInvoice()">Scan Invoice / Read OCR</button>
+<div id="review">
+<h3>3. Review / Edit Details</h3>
 
-  <div id="status"></div>
+<label>Invoice Date</label>
+<input id="invoiceDate" placeholder="DD-MM-YYYY">
 
-  <div id="review">
-    <h3>3. Check / Edit Details</h3>
+<label>Invoice Number</label>
+<input id="invoiceNumber" placeholder="Invoice Number">
 
-    <label>Invoice Date</label>
-    <input id="invoiceDate" placeholder="DD-MM-YYYY">
+<label>Product Name</label>
+<input id="productName" placeholder="Product Name">
 
-    <label>Product Name</label>
-    <input id="productName" placeholder="Product name">
+<label>Order ID</label>
+<input id="orderId" placeholder="Order ID">
 
-    <label>Order ID</label>
-    <input id="orderId" placeholder="Order ID">
+<label>Total Amount (₹)</label>
+<input id="totalAmount" inputmode="decimal" placeholder="Final Invoice Total">
 
-    <label>Total Amount (₹)</label>
-    <input id="totalAmount" type="text" placeholder="Total amount">
+<label>Quantity</label>
+<input id="quantity" type="number" min="1" placeholder="Quantity">
 
-    <label>Quantity</label>
-    <input id="quantity" type="number" min="1" placeholder="Quantity">
-
-    <button id="saveBtn" onclick="saveInvoice()">4. Save to Google Sheet</button>
-  </div>
+<button id="saveBtn" onclick="saveInvoice()">4. Save to Google Sheet</button>
+</div>
 </div>
 
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbzGasdR-hlOOePT80lu9rZ0sz6xR3dBQ5qOUjwOA7XLlrmOuxDzOXGt8r172_CKaYIYSg/exec";
 
+let selectedFile = null;
+
 const camera = document.getElementById("camera");
 const preview = document.getElementById("preview");
 const statusBox = document.getElementById("status");
 
-let selectedFile = null;
-
-camera.addEventListener("change", function() {
-  selectedFile = this.files[0];
+camera.addEventListener("change", function(){
+  selectedFile = this.files[0] || null;
   document.getElementById("review").style.display = "none";
 
-  if (selectedFile) {
+  if(selectedFile){
     preview.src = URL.createObjectURL(selectedFile);
     preview.style.display = "block";
-    statusBox.textContent = "Invoice photo ready. Click Scan Invoice.";
+    statusBox.textContent = "Invoice photo ready.";
   }
 });
 
-function cleanText(text) {
+function normalizeText(text){
   return text
-    .replace(/\r/g, "\n")
-    .replace(/[₹]/g, "Rs.")
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n{2,}/g, "\n")
+    .replace(/\r/g,"\n")
+    .replace(/[₹]/g," Rs. ")
+    .replace(/[ \t]+/g," ")
+    .replace(/\n{2,}/g,"\n")
     .trim();
 }
 
-function findDate(text) {
+function findDate(text){
   const patterns = [
     /Invoice\s*Date\s*[:\-]?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/i,
     /Invoice\s*Date\s*[:\-]?\s*(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/i
   ];
+  for(const re of patterns){
+    const m = text.match(re);
+    if(m) return m[1].replace(/[./]/g,"-");
+  }
+  return "";
+}
 
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match) return match[1].replace(/[./]/g, "-");
+function findInvoiceNumber(text, marketplace){
+  let m;
+  if(marketplace === "Amazon"){
+    m = text.match(/Invoice\s*Number\s*:\s*([A-Z0-9-]+)/i);
+  } else if(marketplace === "Meesho"){
+    m = text.match(/Invoice\s*No\.?\s*[:\-]?\s*([A-Z0-9-]+)/i);
+  } else {
+    m = text.match(/Invoice\s*No\.?\s*[:\-]?\s*([A-Z0-9-]+)/i);
+  }
+  return m ? m[1] : "";
+}
+
+function findOrderId(text, marketplace){
+  let m;
+  if(marketplace === "Amazon"){
+    m = text.match(/Order\s*Number\s*:\s*([0-9]{3}-[0-9]{7}-[0-9]{7})/i);
+  } else if(marketplace === "Meesho"){
+    m = text.match(/Purchase\s*Order\s*No\.?\s*[:\-]?\s*([0-9]{10,}(?:_[0-9]+)?)/i);
+    if(!m) m = text.match(/Order\s*No\.?\s*[:\-]?\s*([0-9]{10,}(?:_[0-9]+)?)/i);
+    if(m) m[1] = m[1].replace(/_[0-9]+$/,"");
+  } else {
+    m = text.match(/Order\s*Id\s*[:\-]?\s*(OD[0-9]+)/i);
+  }
+  return m ? m[1] : "";
+}
+
+function findTotalAmount(text, marketplace){
+  const lines = text.split("\n").map(x => x.trim()).filter(Boolean);
+
+  // Prefer the final total row, never the tax-only row.
+  const patterns = marketplace === "Flipkart"
+    ? [/TOTAL\s*PRICE/i, /^TOTAL\b/i]
+    : marketplace === "Amazon"
+      ? [/^TOTAL\s*:/i, /^TOTAL\b/i]
+      : [/^TOTAL\b/i, /^GRAND\s*TOTAL\b/i];
+
+  for(const pattern of patterns){
+    for(let i = lines.length - 1; i >= 0; i--){
+      if(pattern.test(lines[i])){
+        const amounts = lines[i].match(/(?:Rs\.?\s*)?([0-9,]+\.\d{2})/gi);
+        if(amounts && amounts.length){
+          const last = amounts[amounts.length - 1].match(/[0-9,]+\.\d{2}/);
+          if(last) return last[0].replace(/,/g,"");
+        }
+      }
+    }
+  }
+
+  // Fallback for wrapped total rows.
+  const totalIndex = lines.findIndex(line =>
+    /TOTAL\s*PRICE|^TOTAL\s*:/i.test(line)
+  );
+  if(totalIndex >= 0){
+    const area = lines.slice(totalIndex, totalIndex + 3).join(" ");
+    const amounts = area.match(/[0-9,]+\.\d{2}/g);
+    if(amounts && amounts.length) return amounts[amounts.length - 1].replace(/,/g,"");
+  }
+  return "";
+}
+
+function findQuantity(text, marketplace){
+  let m;
+
+  if(marketplace === "Flipkart"){
+    m = text.match(/TOTAL\s*QTY\s*:\s*(\d+)/i);
+    if(m) return m[1];
+  }
+
+  // Amazon and Meesho: find Qty column near the product/HSN table.
+  const lines = text.split("\n").map(x => x.trim()).filter(Boolean);
+  for(let i = 0; i < lines.length; i++){
+    if(/HSN\s*:/i.test(lines[i]) || /HSN\s+\d/i.test(lines[i])){
+      const area = lines.slice(Math.max(0,i-3), i+2).join(" ");
+      const qtyMatch = area.match(/\bQty\s*[:\-]?\s*(\d+)\b/i);
+      if(qtyMatch) return qtyMatch[1];
+    }
+  }
+
+  m = text.match(/TOTAL\s*QTY\s*:\s*(\d+)/i);
+  return m ? m[1] : "";
+}
+
+function findProduct(text, marketplace){
+  const lines = text.split("\n").map(x => x.trim()).filter(Boolean);
+
+  if(marketplace === "Flipkart"){
+    const start = lines.findIndex(x => /Product\s+Description\s+Qty/i.test(x));
+    if(start >= 0){
+      for(let i=start+1; i<Math.min(lines.length,start+8); i++){
+        if(/HSN\s*:/i.test(lines[i])) break;
+        if(lines[i].length > 12 && !/^(TOTAL|Gross|Taxable)/i.test(lines[i])){
+          return lines[i].replace(/\s+/g," ").slice(0,250);
+        }
+      }
+    }
+  }
+
+  if(marketplace === "Amazon"){
+    const start = lines.findIndex(x => /Description\s+Unit/i.test(x));
+    if(start >= 0){
+      for(let i=start+1; i<Math.min(lines.length,start+12); i++){
+        if(/HSN\s*:/i.test(lines[i])) break;
+        if(lines[i].length > 12 && !/^(TOTAL|Amount in Words)/i.test(lines[i])){
+          return lines[i].replace(/\s+/g," ").slice(0,250);
+        }
+      }
+    }
+  }
+
+  if(marketplace === "Meesho"){
+    const hsnIndex = lines.findIndex(x => /^HSN\b/i.test(x) || /\bHSN\s+\d/i.test(x));
+    if(hsnIndex >= 0){
+      for(let i=hsnIndex-1; i>=Math.max(0,hsnIndex-5); i--){
+        if(lines[i].length > 12 && !/^(Total|Description|Product Details)/i.test(lines[i])){
+          return lines[i].replace(/\s+/g," ").slice(0,250);
+        }
+      }
+    }
   }
 
   return "";
 }
 
-function findOrderId(text, marketplace) {
-  let match;
-
-  if (marketplace === "Amazon") {
-    match = text.match(/Order\s*Number\s*:\s*([0-9]{3}-[0-9]{7}-[0-9]{7})/i);
-  } else if (marketplace === "Meesho") {
-    match = text.match(/Purchase\s*Order\s*No\.?\s*[:\-]?\s*([0-9]{10,}(?:_[0-9]+)?)/i);
-
-    if (!match) {
-      match = text.match(/Order\s*No\.?\s*[:\-]?\s*([0-9]{10,}(?:_[0-9]+)?)/i);
-    }
-
-    if (match) match[1] = match[1].replace(/_[0-9]+$/, "");
-  } else if (marketplace === "Flipkart") {
-    match = text.match(/Order\s*Id\s*[:\-]?\s*(OD[0-9]+)/i);
-  }
-
-  return match ? match[1] : "";
-}
-
-function findAmount(text, marketplace) {
-  let match;
-
-  if (marketplace === "Amazon") {
-    match = text.match(/TOTAL\s*:\s*(?:Rs\.?|INR)?\s*([0-9,]+\.\d{2})/i);
-  } else if (marketplace === "Meesho") {
-    match = text.match(/Total\s+(?:Rs\.?|INR)?\s*([0-9,]+\.\d{2})/i);
-  } else {
-    match = text.match(/TOTAL\s*PRICE\s*:\s*(?:Rs\.?|INR)?\s*([0-9,]+\.\d{2})/i);
-  }
-
-  if (match) return match[1].replace(/,/g, "");
-
-  // Fallback: amount following a total label.
-  match = text.match(/Total(?:\s+Amount)?\s*[:\-]?\s*(?:Rs\.?|INR)?\s*([0-9,]+\.\d{2})/i);
-  return match ? match[1].replace(/,/g, "") : "";
-}
-
-function findQuantity(text, marketplace) {
-  let match;
-
-  if (marketplace === "Flipkart") {
-    match = text.match(/TOTAL\s*QTY\s*:\s*(\d+)/i);
-  } else if (marketplace === "Meesho") {
-    match = text.match(/Description[\s\S]{0,300}?Qty[\s\S]{0,250}?\n[\s\S]{0,100}?\s(\d+)\s+Rs\./i);
-  } else {
-    match = text.match(/TOTAL[\s\S]{0,100}?(\d+)\s*₹?\s*[0-9,]+\.\d{2}/i);
-  }
-
-  if (match) return match[1];
-
-  // General fallback for invoices with one item.
-  match = text.match(/TOTAL\s*QTY\s*:?\s*(\d+)/i);
-  return match ? match[1] : "";
-}
-
-function findProduct(text, marketplace) {
-  let match;
-
-  if (marketplace === "Amazon") {
-    match = text.match(/(?:Qty|Discount)[\s\S]{0,100}?\n?\s*\d+\s+[\s\S]{0,20}?\n?\s*(?:₹|Rs\.?)[\s\S]*?\n([\s\S]{1,300}?)\n\s*HSN\s*:/i);
-
-    if (!match) {
-      match = text.match(/Description\s+Unit[\s\S]{0,500}?\n\s*\d+\s+([\s\S]{1,250}?)\n\s*HSN\s*:/i);
-    }
-  } else if (marketplace === "Meesho") {
-    match = text.match(/(?:Description|Product Details)[\s\S]{0,300}?\n([\s\S]{1,220}?)\s+\d{6,}\s+\d+\s+Rs\./i);
-
-    if (!match) {
-      match = text.match(/(?:Description|HSN)[\s\S]{0,100}?\n([\s\S]{1,180}?)\n\s*\d{6,}/i);
-    }
-  } else {
-    match = text.match(/(?:Product|Description)\s+Qty[\s\S]{0,250}?\n([\s\S]{1,250}?)\n\s*HSN\s*:/i);
-  }
-
-  if (!match) {
-    // Fallback for a clearly labeled product line.
-    match = text.match(/(?:Product Name|Item Name)\s*[:\-]\s*(.+)/i);
-  }
-
-  if (!match) return "";
-
-  return match[1]
-    .replace(/\n/g, " ")
-    .replace(/\s+/g, " ")
-    .replace(/HSN:.*/i, "")
-    .trim()
-    .slice(0, 250);
-}
-
-async function scanInvoice() {
-  if (!selectedFile) {
+async function scanInvoice(){
+  if(!selectedFile){
     alert("Please capture an invoice photo first.");
     return;
   }
 
-  const scanBtn = document.getElementById("scanBtn");
-  scanBtn.disabled = true;
-  statusBox.textContent = "Reading invoice... First OCR may take some time.";
+  const button = document.getElementById("scanBtn");
+  button.disabled = true;
+  statusBox.textContent = "OCR processing...";
 
-  try {
-    const result = await Tesseract.recognize(selectedFile, "eng", {
+  try{
+    const result = await Tesseract.recognize(selectedFile,"eng",{
       logger: info => {
-        if (info.status === "recognizing text") {
-          statusBox.textContent =
-            "OCR processing: " + Math.round(info.progress * 100) + "%";
+        if(info.status === "recognizing text"){
+          statusBox.textContent = "OCR: " + Math.round(info.progress*100) + "%";
         }
       }
     });
 
-    const text = cleanText(result.data.text);
+    const text = normalizeText(result.data.text);
     const marketplace = document.getElementById("marketplace").value;
 
     document.getElementById("invoiceDate").value = findDate(text);
-    document.getElementById("productName").value = findProduct(text, marketplace);
-    document.getElementById("orderId").value = findOrderId(text, marketplace);
-    document.getElementById("totalAmount").value = findAmount(text, marketplace);
-    document.getElementById("quantity").value = findQuantity(text, marketplace);
+    document.getElementById("invoiceNumber").value = findInvoiceNumber(text,marketplace);
+    document.getElementById("productName").value = findProduct(text,marketplace);
+    document.getElementById("orderId").value = findOrderId(text,marketplace);
+    document.getElementById("totalAmount").value = findTotalAmount(text,marketplace);
+    document.getElementById("quantity").value = findQuantity(text,marketplace);
 
     document.getElementById("review").style.display = "block";
-    statusBox.textContent = "OCR completed. Please check all five details before saving.";
+    statusBox.textContent = "OCR completed. Check and correct all six fields before saving.";
 
-  } catch (error) {
+  }catch(error){
     console.error(error);
-    statusBox.textContent = "OCR failed. Please try a clearer invoice photo.";
-  } finally {
-    scanBtn.disabled = false;
+    statusBox.textContent = "OCR failed. Try a clearer invoice photo.";
+  }finally{
+    button.disabled = false;
   }
 }
 
-function saveInvoice() {
+function saveInvoice(){
   const data = {
-    action: "saveInvoice",
-    marketplace: document.getElementById("marketplace").value,
-    invoiceDate: document.getElementById("invoiceDate").value.trim(),
-    productName: document.getElementById("productName").value.trim(),
-    orderId: document.getElementById("orderId").value.trim(),
-    totalAmount: document.getElementById("totalAmount").value.trim(),
-    quantity: document.getElementById("quantity").value.trim()
+    action:"saveInvoice",
+    marketplace:document.getElementById("marketplace").value,
+    invoiceDate:document.getElementById("invoiceDate").value.trim(),
+    invoiceNumber:document.getElementById("invoiceNumber").value.trim(),
+    productName:document.getElementById("productName").value.trim(),
+    orderId:document.getElementById("orderId").value.trim(),
+    totalAmount:document.getElementById("totalAmount").value.trim(),
+    quantity:document.getElementById("quantity").value.trim()
   };
 
-  if (Object.values(data).some(value => !String(value).trim())) {
-    alert("Please check and fill all five details.");
+  if(Object.values(data).some(v => !String(v).trim())){
+    alert("Please fill all six invoice details.");
     return;
   }
 
@@ -309,38 +291,33 @@ function saveInvoice() {
   button.disabled = true;
   statusBox.textContent = "Saving invoice...";
 
-  const callbackName = "invoiceSaveCallback_" + Date.now();
+  const callbackName = "invoiceCallback_" + Date.now();
 
-  window[callbackName] = function(response) {
+  window[callbackName] = function(response){
     delete window[callbackName];
-    script.remove();
+    if(script.parentNode) script.parentNode.removeChild(script);
     button.disabled = false;
 
-    if (response.success) {
-      statusBox.textContent = "Saved successfully to Google Sheet!";
+    if(response.success){
+      statusBox.textContent = "Invoice saved successfully to Google Sheet.";
       document.getElementById("review").style.display = "none";
       camera.value = "";
       selectedFile = null;
       preview.style.display = "none";
-    } else {
-      statusBox.textContent = response.message || "Could not save invoice.";
-      if (response.duplicate) {
-        alert(response.message);
-      }
+    }else{
+      statusBox.textContent = response.message || "Save failed.";
+      if(response.duplicate) alert(response.message);
     }
   };
 
-  const params = new URLSearchParams({
-    ...data,
-    callback: callbackName
-  });
-
+  const params = new URLSearchParams({...data,callback:callbackName});
   const script = document.createElement("script");
   script.src = API_URL + "?" + params.toString();
-  script.onerror = function() {
+
+  script.onerror = function(){
     delete window[callbackName];
     button.disabled = false;
-    statusBox.textContent = "Connection failed. Check Apps Script deployment and URL.";
+    statusBox.textContent = "Connection failed. Check Apps Script deployment.";
   };
 
   document.body.appendChild(script);
